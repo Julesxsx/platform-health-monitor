@@ -17,22 +17,23 @@ class ServiceConfig(BaseModel):
 
 SERVICES: List[ServiceConfig] = [
     ServiceConfig(
-        name="google",
-        url="https://www.google.com",
-        warn_latency_ms=800,
-        crit_latency_ms=2000,
+        name="api-gateway",
+        url="http://localhost:8001/health",
+        warn_latency_ms=500,
+        crit_latency_ms=1000,
     ),
     ServiceConfig(
-        name="github",
-        url="https://github.com",
-        warn_latency_ms=800,
-        crit_latency_ms=2000,
+        name="worker-service",
+        url="http://localhost:8002/health",
+        warn_latency_ms=500,
+        crit_latency_ms=1000,
+        expected_status=200,
     ),
     ServiceConfig(
-        name="httpbin",
-        url="https://httpbin.org/get",
-        warn_latency_ms=2000,
-        crit_latency_ms=5000,
+        name="flaky-queue",
+        url="http://localhost:8003/health",
+        warn_latency_ms=500,
+        crit_latency_ms=1200,
     ),
 ]
 
