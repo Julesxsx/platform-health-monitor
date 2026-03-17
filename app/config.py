@@ -15,23 +15,25 @@ class ServiceConfig(BaseModel):
     crit_latency_ms: int = 1000
     expected_status: int = 200
 
+import os
+
 SERVICES: List[ServiceConfig] = [
     ServiceConfig(
         name="api-gateway",
-        url="http://localhost:8001/health",
+        url=os.getenv("API_GATEWAY_URL", "http://localhost:8001/health"),
         warn_latency_ms=500,
         crit_latency_ms=1000,
     ),
     ServiceConfig(
         name="worker-service",
-        url="http://localhost:8002/health",
+        url=os.getenv("WORKER_URL", "http://localhost:8002/health"),
         warn_latency_ms=500,
         crit_latency_ms=1000,
         expected_status=200,
     ),
     ServiceConfig(
         name="flaky-queue",
-        url="http://localhost:8003/health",
+        url=os.getenv("FLAKY_URL", "http://localhost:8003/health"),
         warn_latency_ms=500,
         crit_latency_ms=1200,
     ),
