@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, desc
 from app.store import uptime_pct, get_recent_checks, get_incidents, CheckResult, AsyncSession, engine
+from app.dashboard import router as dashboard_router
 from app.config import SERVICES
 
 app = FastAPI(title="Platform Health Monitor")
@@ -13,6 +14,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(dashboard_router)
 
 @app.get("/health")
 async def health_summary():

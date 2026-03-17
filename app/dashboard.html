@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Platform Health Monitor</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+
+    #refresh-info {
+      font-size: 0.75rem;
+      color: #64748b;
+    }
+
+    #overall-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-ok      { background: #14532d; color: #4ade80; }
+    .badge-warn    { background: #713f12; color: #fbbf24; }
+    .badge-down    { background: #7f1d1d; color: #f87171; }
+
+    .section-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #475569;
+      margin-bottom: 0.75rem;
+    }
+
+    /* ── Summary metrics ── */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 2rem;
+    }
+
+    .metric-card {
+      background: #1e2330;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+    }
+
+    .metric-label {
+      font-size: 0.72rem;
+      color: #64748b;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .metric-value {
+      font-size: 1.6rem;
+      font-weight: 600;
+      color: #f8fafc;
+      line-height: 1;
+    }
+
+    .metric-sub {
+      font-size: 0.7rem;
+      color: #475569;
+      margin-top: 4px;
+    }
+
+    /* ── Service cards ── */
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+      margin-bottom: 2rem;
+    }
+
+    .service-card {
+      background: #1e2330;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .service-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 3px;
+      height: 100%;
+      border-radius: 10px 0 0 10px;
+    }
+
+    .service-card.up::before    { background: #22c55e; }
+    .service-card.degraded::before { background: #f59e0b; }
+    .service-card.down::before  { background: #ef4444; }
+
+    .service-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .service-name {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+
+    .status-pill {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .pill-up       { background: #14532d; color: #4ade80; }
+    .pill-degraded { background: #713f12; color: #fbbf24; }
+    .pill-down     { background: #7f1d1d; color: #f87171; }
+
+    .service-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .stat-box {
+      background: #151820;
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 3px;
+    }
+
+    .stat-value {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    /* SLA bar */
+    .sla-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 0.75rem;
+    }
+
+    .sla-label {
+      font-size: 0.68rem;
+      color: #475569;
+      min-width: 28px;
+    }
+
+    .sla-track {
+      flex: 1;
+      height: 5px;
+      background: #2d3748;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .sla-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s;
+    }
+
+    .sla-pct {
+      font-size: 0.72rem;
+      font-weight: 600;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    /* Uptime history dots */
+    .history-row {
+      display: flex;
+      gap: 2px;
+      flex-wrap: wrap;
+    }
+
+    .history-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+    }
+
+    /* ── Charts ── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 14px;
+      margin-bottom: 2rem;
+    }
+
+    .chart-card {
+      background: #1e2330;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+
+    .chart-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Incidents ── */
+    .incidents-card {
+      background: #1e2330;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 2rem;
+    }
+
+    .incidents-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    .incident-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 0.85rem 1.25rem;
+      border-bottom: 1px solid #1a1f2e;
+      font-size: 0.82rem;
+    }
+
+    .incident-row:last-child { border-bottom: none; }
+
+    .incident-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+
+    .dot-down { background: #ef4444; }
+    .dot-warn { background: #f59e0b; }
+
+    .incident-service {
+      font-weight: 600;
+      color: #e2e8f0;
+      min-width: 120px;
+    }
+
+    .incident-detail {
+      color: #64748b;
+      flex: 1;
+    }
+
+    .incident-time {
+      color: #475569;
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
+
+    .no-incidents {
+      padding: 2rem;
+      text-align: center;
+      color: #475569;
+      font-size: 0.85rem;
+    }
+
+    .pulse {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1><span class="pulse"></span>Platform Health Monitor</h1>
+    <div id="refresh-info">Loading...</div>
+  </div>
+  <span id="overall-badge" class="badge-ok">All systems operational</span>
+</header>
+
+<!-- Summary metrics -->
+<div class="section-title">Overview</div>
+<div class="metric-grid" id="metric-grid">
+  <div class="metric-card"><div class="metric-label">Services monitored</div><div class="metric-value" id="m-total">—</div></div>
+  <div class="metric-card"><div class="metric-label">Services up</div><div class="metric-value" id="m-up" style="color:#4ade80">—</div></div>
+  <div class="metric-card"><div class="metric-label">Incidents (24h)</div><div class="metric-value" id="m-incidents" style="color:#f87171">—</div></div>
+  <div class="metric-card"><div class="metric-label">Avg uptime (24h)</div><div class="metric-value" id="m-uptime">—</div></div>
+</div>
+
+<!-- Service cards -->
+<div class="section-title">Service status</div>
+<div class="services-grid" id="services-grid"></div>
+
+<!-- Latency charts -->
+<div class="section-title">Latency (last 50 checks)</div>
+<div class="charts-grid" id="charts-grid"></div>
+
+<!-- Incident log -->
+<div class="section-title">Incident log (24h)</div>
+<div class="incidents-card">
+  <div class="incidents-header section-title" style="margin:0">Recent failures</div>
+  <div id="incident-list"></div>
+</div>
+
+<script>
+const COLORS = {
+  'api-gateway':    '#818cf8',
+  'worker-service': '#34d399',
+  'flaky-queue':    '#fb923c',
+};
+
+const charts = {};
+
+function statusClass(svc) {
+  if (!svc.status || svc.status === 'down') return 'down';
+  if (svc.latency_ms && svc.latency_ms >= 500) return 'degraded';
+  return 'up';
+}
+
+function pillClass(state) {
+  return { up: 'pill-up', degraded: 'pill-degraded', down: 'pill-down' }[state];
+}
+
+function slaColor(pct, target) {
+  if (pct >= target) return '#22c55e';
+  if (pct >= target - 1) return '#f59e0b';
+  return '#ef4444';
+}
+
+function formatTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatAgo(iso) {
+  const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  return `${Math.floor(diff/3600)}h ago`;
+}
+
+async function fetchHealth() {
+  const r = await fetch('/health');
+  return r.json();
+}
+
+async function fetchIncidents() {
+  const r = await fetch('/incidents');
+  return r.json();
+}
+
+async function fetchMetrics(service) {
+  const r = await fetch(`/metrics/${service}?hours=2`);
+  return r.json();
+}
+
+function renderServices(services) {
+  const grid = document.getElementById('services-grid');
+  grid.innerHTML = '';
+
+  services.forEach(svc => {
+    const state = statusClass(svc);
+    const uptime = svc.uptime_24h ?? 0;
+    const slaOk = svc.sla_ok;
+    const color = slaColor(uptime, svc.sla_target);
+
+    const dots = Array.from({ length: 30 }, (_, i) => {
+      const c = i < Math.floor(uptime / 100 * 30) ? '#22c55e' : '#ef4444';
+      return `<div class="history-dot" style="background:${c}" title="check ${i+1}"></div>`;
+    }).join('');
+
+    grid.innerHTML += `
+      <div class="service-card ${state}">
+        <div class="service-header">
+          <span class="service-name">${svc.service}</span>
+          <span class="status-pill ${pillClass(state)}">${state}</span>
+        </div>
+        <div class="service-stats">
+          <div class="stat-box">
+            <div class="stat-label">Latency</div>
+            <div class="stat-value">${svc.latency_ms ? svc.latency_ms + 'ms' : '—'}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Uptime 24h</div>
+            <div class="stat-value" style="color:${color}">${uptime.toFixed(1)}%</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">SLA</div>
+            <div class="stat-value" style="color:${slaOk ? '#4ade80' : '#f87171'}">${slaOk ? 'OK' : 'BREACH'}</div>
+          </div>
+        </div>
+        <div class="sla-row">
+          <span class="sla-label">SLA</span>
+          <div class="sla-track">
+            <div class="sla-fill" style="width:${Math.min(uptime,100)}%;background:${color}"></div>
+          </div>
+          <span class="sla-pct" style="color:${color}">${uptime.toFixed(2)}%</span>
+        </div>
+        <div class="history-row">${dots}</div>
+        ${svc.last_checked ? `<div style="font-size:0.68rem;color:#475569;margin-top:8px">Last checked ${formatAgo(svc.last_checked)}</div>` : ''}
+      </div>
+    `;
+  });
+}
+
+function renderMetrics(service, data) {
+  const chartsGrid = document.getElementById('charts-grid');
+  const canvasId = `chart-${service}`;
+
+  if (!document.getElementById(canvasId)) {
+    const card = document.createElement('div');
+    card.className = 'chart-card';
+    card.innerHTML = `<div class="chart-title">${service} — latency (ms)</div><canvas id="${canvasId}" height="120"></canvas>`;
+    chartsGrid.appendChild(card);
+  }
+
+  const timeline = (data.timeline || []).slice(-50);
+  const labels = timeline.map(t => formatTime(t.ts));
+  const values = timeline.map(t => t.latency_ms ?? 0);
+  const color = COLORS[service] || '#818cf8';
+
+  if (charts[service]) {
+    charts[service].data.labels = labels;
+    charts[service].data.datasets[0].data = values;
+    charts[service].update('none');
+    return;
+  }
+
+  charts[service] = new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        borderColor: color,
+        backgroundColor: color + '18',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        tension: 0.4,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          grid: { color: '#1e2d3d' },
+          ticks: { color: '#475569', font: { size: 10 }, maxTicksLimit: 6 }
+        },
+        y: {
+          grid: { color: '#1e2d3d' },
+          ticks: { color: '#475569', font: { size: 10 } },
+          min: 0,
+        }
+      }
+    }
+  });
+}
+
+function renderIncidents(incidents) {
+  const list = document.getElementById('incident-list');
+  if (!incidents.length) {
+    list.innerHTML = '<div class="no-incidents">No incidents in the last 24 hours</div>';
+    return;
+  }
+  list.innerHTML = incidents.slice(0, 20).map(inc => `
+    <div class="incident-row">
+      <div class="incident-dot dot-down"></div>
+      <span class="incident-service">${inc.service}</span>
+      <span class="incident-detail">
+        HTTP ${inc.status ?? '—'} · ${inc.latency_ms ? inc.latency_ms + 'ms' : '—'}
+        ${inc.error ? '· ' + inc.error : ''}
+      </span>
+      <span class="incident-time">${formatAgo(inc.ts)}</span>
+    </div>
+  `).join('');
+}
+
+function renderSummary(services, incidentCount) {
+  const total = services.length;
+  const up = services.filter(s => s.status === 'up').length;
+  const avgUptime = services.reduce((a, s) => a + (s.uptime_24h ?? 0), 0) / total;
+
+  document.getElementById('m-total').textContent = total;
+  document.getElementById('m-up').textContent = up;
+  document.getElementById('m-incidents').textContent = incidentCount;
+  document.getElementById('m-uptime').textContent = avgUptime.toFixed(2) + '%';
+
+  const badge = document.getElementById('overall-badge');
+  const allUp = services.every(s => s.status === 'up');
+  const anyDown = services.some(s => s.status === 'down');
+
+  if (allUp) {
+    badge.textContent = 'All systems operational';
+    badge.className = 'badge-ok';
+  } else if (anyDown) {
+    badge.textContent = 'Outage detected';
+    badge.className = 'badge-down';
+  } else {
+    badge.textContent = 'Partial degradation';
+    badge.className = 'badge-warn';
+  }
+}
+
+async function refresh() {
+  try {
+    const [healthData, incidentData] = await Promise.all([
+      fetchHealth(),
+      fetchIncidents(),
+    ]);
+
+    const services = healthData.services || [];
+    const incidents = incidentData.incidents || [];
+
+    renderSummary(services, incidents.length);
+    renderServices(services);
+    renderIncidents(incidents);
+
+    for (const svc of services) {
+      const metrics = await fetchMetrics(svc.service);
+      renderMetrics(svc.service, metrics);
+    }
+
+    document.getElementById('refresh-info').textContent =
+      `Last updated: ${new Date().toLocaleTimeString()} · auto-refresh every 30s`;
+
+  } catch (e) {
+    document.getElementById('refresh-info').textContent = 'Error fetching data — retrying...';
+    console.error(e);
+  }
+}
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>
