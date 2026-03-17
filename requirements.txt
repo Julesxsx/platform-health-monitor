@@ -1,0 +1,11 @@
+fastapi 
+uvicorn 
+apscheduler 
+httpx   
+sqlalchemy 
+aiosqlite 
+python-dotenv 
+pydantic   
+httpx 
+requests 
+jinja2
